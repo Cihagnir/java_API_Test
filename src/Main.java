@@ -1,5 +1,4 @@
 import java.net.HttpURLConnection ;
-import java.net.StandardSocketOptions;
 import java.net.URL ;
 
 import org.json.simple.parser.JSONParser ;
@@ -13,181 +12,203 @@ import java.util.List ;
 
 
 
-import java.util.Objects;
-import com.fasterxml.jackson.databind.ObjectMapper;
+class ProjectManager {
+
+    public JSONArray dataCollecter(String apiURL){
+
+        try{
+            // Try to connect our API Service
+            URL url = new URL(apiURL);
+            HttpURLConnection urlConnection = (HttpURLConnection) url.openConnection() ;
+            urlConnection.setRequestMethod("GET");
+            urlConnection.connect();
+
+            int responseCode = urlConnection.getResponseCode() ;
+
+            // Check the our connection establish
+            if(responseCode != 200){ // Negative Case
+                throw  new RuntimeException("HttpResponseCode: " + responseCode);
+            }else{ // Positive Case
+
+                // Now we can pull the all data
+
+                StringBuilder informationString =  new StringBuilder() ;
+
+                Scanner dataScanner = new Scanner(url.openStream()) ;
+
+                informationString.append(dataScanner.nextLine()) ;
+
+                dataScanner.close();
+
+                // After collect the all data we have to transform it into Json Array
+
+                // We scrape the json array on string data type from our data
+                String jsonString = informationString.toString() ;
+
+                String[] splitedString = jsonString.split("\"intraDayTradeHistoryList\":") ;
+
+                String rawData  = splitedString[1] ;
+
+                int endIndex = rawData.indexOf("]") ;
+
+                String data = rawData.substring(0, endIndex+1) ;
+
+
+                // Now we can transform our string into actual JsonArray
+                JSONParser jsonParser = new JSONParser() ;
+
+                JSONArray jsonArray = (JSONArray) jsonParser.parse(data) ;
+
+                return  jsonArray ;
+
+
+            }
+
+
+        }catch (Exception error){
+
+            error.printStackTrace();
+            return new JSONArray() ;
+
+        }}
+
+
+
+    public boolean jsonArrayIndexCheck(int indexVal, JSONArray jsonArray){
+
+        // We can check the are we hit end of the list
+        try{
+            JSONObject tempObj = (JSONObject) jsonArray.get(indexVal) ;
+            return false ;
+
+        }catch (IndexOutOfBoundsException exception){
+            return true;
+
+        }
+
+        // The reason I create that list to reduce the code inside of the try catch block
+
+    }
+
+
+    public long priceValueFixer (JSONObject indexObject){
+
+        try{
+            double priceVal = (double) indexObject.get("price");
+
+            long fixedPriceVal = (long) priceVal ;
+
+            return fixedPriceVal ;
+
+        }catch (ClassCastException exception){
+            long priceVal = (long) indexObject.get("price");
+
+            return priceVal ;
+        }
+
+    }
+
+}
+
 
 
 public class Main {
 
     public static void main(String[] args) {
 
+        String apiUrl = "https://seffaflik.epias.com.tr/transparency/service/market/intra-day-trade-history?endDate=2022-02-06&startDate=2022-02-06" ;
 
-        // Web Siteden gerekli veriyi çekmek
-        try {
+        ProjectManager projectManager = new ProjectManager() ;
 
-            String apiUrl = "https://seffaflik.epias.com.tr/transparency/service/market/intra-day-trade-history?endDate=2022-02-06&startDate=2022-02-06" ;
-            URL url = new URL(apiUrl);
-
-            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-            conn.setRequestMethod("GET");
-            conn.connect();
-
-            //Check if connect is made
-            int responseCode = conn.getResponseCode();
-
-            // 200 OK
-            if (responseCode != 200) {
-                // That guy throw the our man made Error stage
-                throw new RuntimeException("HttpResponseCode: " + responseCode);
-            }
-
-            else {
-                // Web site to string converion
-                StringBuilder informationString = new StringBuilder();
-                Scanner scanner = new Scanner(url.openStream());
-
-                informationString.append(scanner.nextLine());
-
-                // End of the string conversion
-                scanner.close();
-
-                String jsonString = informationString.toString() ;
-
-                // Some bulshit
-                String[] splitedString = jsonString.split("\"intraDayTradeHistoryList\":") ;
-
-                String rawData = splitedString[1] ;
-                int end = rawData.indexOf("]");
-                String data = rawData.substring(0,end+1) ;
-
-        // Web siteden gereken veriyi sonunda çektik aq
-        // ----------------------------------------------------
-
-        // Aldığımız verileri arrayin içine atmayı başardık
-
-                JSONParser jsonParser = new JSONParser() ;
-
-                JSONArray jsonArray = (JSONArray)jsonParser.parse(data) ;
-        // -------------------------------------------------------
+        JSONArray jsonArray = projectManager.dataCollecter(apiUrl) ;
 
 
-        // Hash map method denememiz
+        // We have to create the our storage list & hast table
+        List<String> conractList = new ArrayList<String>() ;
+        HashMap<String, Double> totalOperAmount = new HashMap<String, Double>() ;
+        HashMap<String, Double> totalOperCount = new HashMap<String, Double>() ;
+        HashMap<String, Double> weightAvrgPrice = new HashMap<String, Double>() ;
 
-                List<String> conractList = new ArrayList<String>() ;
-                HashMap<String, Double> totalOperAmount = new HashMap<String, Double>() ;
-                HashMap<String, Double> totalOperCount = new HashMap<String, Double>() ;
-                HashMap<String, Double> weightAvrgPrice = new HashMap<String, Double>() ;
+        // Asign the our control variable
+        String allowenceKey = "PH" ;
+        boolean isFinish = false ;
+        int index = 0 ;
 
-                boolean isFinish = false ;
-                int index = 0 ;
-                String allowenceKey = "PH" ;
+        // Start the our loop to go trough every value
+        while (!isFinish) {
 
-                while (!isFinish) {
+            // Get the our json object
+            JSONObject indexObject = (JSONObject)jsonArray.get(index) ;
+            index++ ;
 
+            // Pull the our conract value
+            String conractValue = (String) indexObject.get("conract");
 
-                    // Hala liste içinde olduğumuza dair hızlı bir kontrol
-                    try {
-                        JSONObject indexObject = (JSONObject)jsonArray.get(index) ;
-                        index++ ;
+            // Split the our conract value key and object
+            String objectKey = conractValue.substring(0,2) ;
+            String objectValue = conractValue.substring(2);
 
-                        String conractValue = (String) indexObject.get("conract");
+            // We check the our key value is it equal to "PH"
+            if (objectKey.equals(allowenceKey)){
 
-                        String objectKey = conractValue.substring(0,2) ;
-                        String objectValue = conractValue.substring(2);
+                // Than we check the is it already in the hast table
+                if (conractList.contains(objectValue)){
 
-                        // Verini PH içerip içermediğine bakıyoruz
-                        if (objectKey.equals(allowenceKey)){
+                    // Get the past value on our table
+                    double pastValOprtAmnt = totalOperAmount.get(objectValue) ;
+                    double pastValOprtCnt = totalOperCount.get(objectValue) ;
+                    double pastValAvrgPrice = weightAvrgPrice.get(objectValue) ;
 
-                            // Sonra daha önceden kullanıp kullanmadığımıza
-                            if (conractList.contains(objectValue)){
+                    // Get the other values from jsonObject
+                    long priceVal = projectManager.priceValueFixer(indexObject) ;
+                    long quantVal = (long) indexObject.get("quantity") ;
 
-                                double pastValOprtAmnt = totalOperAmount.get(objectValue) ;
-                                double pastValOprtCnt = totalOperCount.get(objectValue) ;
-                                double pastValAvrgPrice = weightAvrgPrice.get(objectValue) ;
+                    // Calculate the our new values
+                    double newValOprtAmnt = pastValOprtAmnt + (priceVal*quantVal/10.0) ;
+                    double newValOprtCnt = pastValOprtCnt + (quantVal/10.0) ;
+                    double newValAvrgPrice = pastValAvrgPrice + newValOprtAmnt/newValOprtCnt ;
 
-                                try {
-                                    double priceVal = (double) indexObject.get("price");
-                                    long quantVal = (long) indexObject.get("quantity") ;
+                    // In the end we replace the our value
+                    totalOperAmount.replace(objectValue,newValOprtAmnt);
+                    totalOperCount.replace(objectValue,newValOprtCnt);
+                    weightAvrgPrice.replace(objectValue,newValAvrgPrice);
 
-                                    double newValOprtAmnt = pastValOprtAmnt + (priceVal*quantVal/10.0) ;
-                                    double newValOprtCnt = pastValOprtCnt + (quantVal/10.0) ;
-                                    double newValAvrgPrice = pastValAvrgPrice + newValOprtAmnt/newValOprtCnt ;
+                } else {
 
-                                    totalOperAmount.replace(objectValue,newValOprtAmnt);
-                                    totalOperCount.replace(objectValue,newValOprtCnt);
-                                    weightAvrgPrice.replace(objectValue,newValAvrgPrice);
-                                }catch (ClassCastException exception){
-                                    long priceVal = (long) indexObject.get("price");
-                                    long quantVal = (long) indexObject.get("quantity") ;
+                    // We add the our value in check list
+                    conractList.add(objectValue) ;
 
-                                    double newValOprtAmnt = pastValOprtAmnt + (priceVal*quantVal/10.0) ;
-                                    double newValOprtCnt = pastValOprtCnt + (quantVal/10.0) ;
-                                    double newValAvrgPrice = pastValAvrgPrice + newValOprtAmnt/newValOprtCnt ;
+                    // Get the other values from jsonObject
+                    long priceVal = projectManager.priceValueFixer(indexObject) ;
+                    long quantVal = (long) indexObject.get("quantity") ;
 
-                                    totalOperAmount.replace(objectValue,newValOprtAmnt);
-                                    totalOperCount.replace(objectValue,newValOprtCnt);
-                                    weightAvrgPrice.replace(objectValue,newValAvrgPrice);
-                                }
+                    // Calculate the our new values
+                    double newValOprtAmnt = priceVal*quantVal/10.0 ;
+                    double newValOprtCnt = quantVal/10.0 ;
+                    double newValAvrgPrice = newValOprtAmnt/newValOprtCnt ;
 
-
-
-                            } else {
-
-                                conractList.add(objectValue) ;
-
-                                try {
-                                    double priceVal = (double) indexObject.get("price");
-                                    long quantVal = (long) indexObject.get("quantity") ;
-
-                                    double newValOprtAmnt = priceVal*quantVal/10.0 ;;
-                                    double newValOprtCnt = quantVal/10.0 ;
-                                    double newValAvrgPrice = newValOprtAmnt/newValOprtCnt ;
-
-                                    totalOperAmount.put(objectValue,newValOprtAmnt);
-                                    totalOperCount.put(objectValue,newValOprtCnt);
-                                    weightAvrgPrice.put(objectValue,newValAvrgPrice);
-                                }catch (ClassCastException exception) {
-                                    long priceVal = (long) indexObject.get("price");
-                                    long quantVal = (long) indexObject.get("quantity") ;
-
-                                    double newValOprtAmnt = priceVal*quantVal/10.0 ;;
-                                    double newValOprtCnt = quantVal/10.0 ;
-                                    double newValAvrgPrice = newValOprtAmnt/newValOprtCnt ;
-
-                                    totalOperAmount.put(objectValue,newValOprtAmnt);
-                                    totalOperCount.put(objectValue,newValOprtCnt);
-                                    weightAvrgPrice.put(objectValue,newValAvrgPrice);
-                                }
-
-
-                            }
-
-                        }
-
-
-                    }catch (IndexOutOfBoundsException error){
-                        isFinish = true ;
-                    }
-
-
+                    // Put the new values into our table
+                    totalOperAmount.put(objectValue,newValOprtAmnt);
+                    totalOperCount.put(objectValue,newValOprtCnt);
+                    weightAvrgPrice.put(objectValue,newValAvrgPrice);
                 }
-
-                System.out.println(totalOperAmount);
-                System.out.println(totalOperCount);
-                System.out.println(weightAvrgPrice);
-
-
-
-
-
             }
-        } catch (Exception e) {
-            e.printStackTrace();
+
+            // Let's check the next object is exist
+            boolean isHit =  projectManager.jsonArrayIndexCheck(index, jsonArray) ;
+            if (isHit){
+                isFinish = true ;
+            }
         }
+        // System print
+        System.out.println(totalOperAmount);
+        System.out.println(totalOperCount);
+        System.out.println(weightAvrgPrice);
+
     }
 
-
 }
+
 
 
 

@@ -13,6 +13,5 @@
     <orderEntry type="library" name="google.code.gson" level="project" />
     <orderEntry type="library" name="json" level="application" />
     <orderEntry type="library" name="json-simple-1.1.1" level="project" />
-    <orderEntry type="library" name="json-20200518" level="project" />
   </component>
 </module>
